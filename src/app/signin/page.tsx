@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { auth, signIn, enabledProviders } from "@/auth";
+import { auth, signIn, enabledOAuthProviders } from "@/auth";
+import { CredentialsForm } from "@/components/CredentialsForm";
 
 export const metadata: Metadata = { title: "Sign in — Game Checker" };
 
@@ -11,9 +12,9 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 export default async function SignInPage() {
   const session = await auth();
-  if (session?.user) redirect("/consoles");
+  if (session?.user) redirect("/welcome");
 
-  const providers = enabledProviders();
+  const oauth = enabledOAuthProviders();
 
   return (
     <div className="card-surface mx-auto max-w-md p-8 text-center">
@@ -25,30 +26,36 @@ export default async function SignInPage() {
         Sign in to save your consoles and game library.
       </p>
 
-      {providers.length === 0 ? (
-        <p className="mt-6 rounded-2xl bg-amber-50 p-4 text-sm text-amber-700">
-          No OAuth providers are configured. Set <code>AUTH_GITHUB_ID</code> /
-          <code>AUTH_GOOGLE_ID</code> (and their secrets) in your environment.
-        </p>
-      ) : (
-        <div className="mt-6 space-y-3">
-          {providers.map((provider) => (
-            <form
-              key={provider}
-              action={async () => {
-                "use server";
-                await signIn(provider, { redirectTo: "/welcome" });
-              }}
-            >
-              <button
-                type="submit"
-                className="w-full rounded-full bg-primary px-6 py-3 font-bold text-white shadow-soft transition hover:bg-primary-strong"
+      <div className="mt-6">
+        <CredentialsForm />
+      </div>
+
+      {oauth.length > 0 && (
+        <>
+          <div className="my-6 flex items-center gap-3 text-xs font-bold uppercase text-ink-soft">
+            <span className="h-px flex-1 bg-line" />
+            or
+            <span className="h-px flex-1 bg-line" />
+          </div>
+          <div className="space-y-3">
+            {oauth.map((provider) => (
+              <form
+                key={provider}
+                action={async () => {
+                  "use server";
+                  await signIn(provider, { redirectTo: "/welcome" });
+                }}
               >
-                {PROVIDER_LABELS[provider] ?? `Continue with ${provider}`}
-              </button>
-            </form>
-          ))}
-        </div>
+                <button
+                  type="submit"
+                  className="w-full rounded-full border border-line bg-surface px-6 py-3 font-bold transition hover:border-primary"
+                >
+                  {PROVIDER_LABELS[provider] ?? `Continue with ${provider}`}
+                </button>
+              </form>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

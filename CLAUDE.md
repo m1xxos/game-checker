@@ -54,11 +54,14 @@ adapter — the constructor *requires* an adapter. The generated client lives in
 Models: Auth.js tables + `ConsoleProfile` (mirrors an EmuReady device id plus a
 cached chipset/GPU snapshot so we avoid refetching) and `SavedGame`.
 
-**Auth.** Auth.js v5 (`src/auth.ts`), database sessions, Prisma adapter. OAuth
-providers are added to the array only when their `AUTH_<PROVIDER>_*` env vars
-are set, so the app boots with whatever is configured; `enabledProviders()`
-drives the sign-in UI. A `session` callback copies the DB user id onto
-`session.user.id` (relied on throughout `src/lib/user-data.ts` and `actions.ts`).
+**Auth.** Auth.js v5 (`src/auth.ts`), **JWT sessions** (required because the
+Credentials provider can't persist DB sessions), Prisma adapter. Local
+email/password accounts are the default (bcrypt hash in `User.passwordHash`);
+registration/sign-in are server actions in `src/lib/auth-actions.ts`. OAuth
+providers are added only when their `AUTH_<PROVIDER>_*` env vars are set;
+`enabledOAuthProviders()` drives the OAuth buttons. The `jwt`/`session`
+callbacks carry the user id onto `session.user.id` (relied on throughout
+`src/lib/user-data.ts` and `actions.ts`). Only `AUTH_SECRET` is required to run.
 
 **Mutations** are server actions in `src/lib/actions.ts` (`addConsole`,
 `removeConsole`, `setActiveConsole`, `toggleSavedGame`, `searchDevicesAction`);

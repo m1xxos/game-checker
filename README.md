@@ -36,17 +36,18 @@ The app is at **http://localhost:3000**. Compose starts three things:
 
 ### Required environment
 
-At minimum set `AUTH_SECRET` and **one** OAuth provider so you can sign in:
+Only `AUTH_SECRET` is required — **local email/password accounts work out of the
+box** (create one from the sign-in page). OAuth is optional.
 
 | Variable | Notes |
 | --- | --- |
-| `AUTH_SECRET` | `npx auth secret` or `openssl rand -base64 33` |
+| `AUTH_SECRET` | **Required.** `npx auth secret` or `openssl rand -base64 33` |
 | `AUTH_URL` | Public URL, e.g. `http://localhost:3000` |
-| `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | GitHub OAuth app — callback `${AUTH_URL}/api/auth/callback/github` |
-| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth client — callback `${AUTH_URL}/api/auth/callback/google` |
+| `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | Optional GitHub OAuth — callback `${AUTH_URL}/api/auth/callback/github` |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Optional Google OAuth — callback `${AUTH_URL}/api/auth/callback/google` |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Optional; default to `gamechecker` |
 
-Providers without credentials are simply hidden on the sign-in page.
+OAuth providers without credentials are simply hidden on the sign-in page.
 
 ## Local development
 
