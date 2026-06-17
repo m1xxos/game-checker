@@ -130,6 +130,22 @@ function tierPoints(rank: number | undefined): number {
 
 const DAY_MS = 86_400_000;
 
+/**
+ * Normalize a game title for cross-platform de-duplication. Lowercases, strips
+ * edition/port suffixes ("Definitive Edition", "Remaster", …) and punctuation
+ * so the Windows and Switch entries of one game collapse together.
+ */
+export function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(
+      /\b(definitive|complete|remaster(ed)?|enhanced|deluxe|goty|game of the year|anniversary|hd|remake|classic)\b/g,
+      "",
+    )
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 export interface Recommendation {
   game: Game;
   /** Best (lowest) performance rank seen for this game on the console. */
@@ -146,8 +162,14 @@ export interface Recommendation {
 
 export interface RecommendOptions {
   limit?: number;
-  /** Games to omit (e.g. already in the user's library). */
+  /** Games to omit by EmuReady id (e.g. already in the user's library). */
   excludeGameIds?: Set<string>;
+  /**
+   * Normalized titles to omit. EmuReady has a separate entry per platform, so
+   * excluding by id alone would still surface (say) the Switch port of a game
+   * the user saved on Windows. Build with `normalizeTitle`.
+   */
+  excludeTitles?: Set<string>;
   /**
    * Systems the user plays, mapped to how many library games they have on each.
    * Games on these systems are boosted so recommendations reflect taste.
@@ -188,7 +210,8 @@ export function recommendGames(
   console: { deviceId: string; socName?: string | null } | null,
   opts: RecommendOptions = {},
 ): Recommendation[] {
-  const { limit = 18, excludeGameIds, boostSystems, maxRank = 3 } = opts;
+  const { limit = 18, excludeGameIds, excludeTitles, boostSystems, maxRank = 3 } =
+    opts;
   const { exact, similar } = matchListingsToConsole(listings, console);
   // Same-chipset reports are a strong proxy but rate slightly below the exact
   // device they were measured on.
@@ -197,15 +220,19 @@ export function recommendGames(
     ...similar.map((l) => ({ l, weight: 0.85, exact: false })),
   ];
 
+  // Key by normalized title so a game's per-platform entries merge into one
+  // recommendation (we keep the best-running variant as the representative).
   const byGame = new Map<string, Agg>();
   for (const { l, weight, exact: isExact } of weighted) {
     if (!l.game) continue;
     if (excludeGameIds?.has(l.game.id)) continue;
+    const key = normalizeTitle(l.game.normalizedTitle ?? l.game.title);
+    if (excludeTitles?.has(key)) continue;
     const rank = l.performance?.rank ?? 99;
     const created = Date.parse(l.createdAt ?? "") || 0;
-    const cur = byGame.get(l.game.id);
+    const cur = byGame.get(key);
     if (!cur) {
-      byGame.set(l.game.id, {
+      byGame.set(key, {
         game: l.game,
         bestRank: rank,
         bestWeight: weight,
@@ -219,6 +246,7 @@ export function recommendGames(
       if (rank < cur.bestRank) {
         cur.bestRank = rank;
         cur.bestWeight = weight;
+        cur.game = l.game; // show the best-running variant
       }
       cur.reportCount += 1;
       cur.upvotes += l.upvoteCount ?? 0;

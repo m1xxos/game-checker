@@ -2,7 +2,11 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getListingsByDevice } from "@/lib/emuready";
 import { getActiveConsole, getSavedGames, currentUserId } from "@/lib/user-data";
-import { recommendGames, type Recommendation } from "@/lib/compat";
+import {
+  recommendGames,
+  normalizeTitle,
+  type Recommendation,
+} from "@/lib/compat";
 import { GameCard } from "@/components/GameCard";
 import { ChannelGrid } from "@/components/ChannelGrid";
 import { RunsWellToggle } from "@/components/RunsWellToggle";
@@ -64,6 +68,9 @@ export default async function DashboardPage({
     recommended = recommendGames(listings, active, {
       limit: 24,
       excludeGameIds: new Set(saved.map((s) => s.gameId)),
+      // Exclude by title too, so a game saved on one platform doesn't reappear
+      // as its port on another (e.g. Hades on Windows vs. Switch).
+      excludeTitles: new Set(saved.map((s) => normalizeTitle(s.title))),
       boostSystems: librarySystems,
       maxRank: runsWellOnly ? 2 : 3,
     });
