@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { Game } from "@/lib/emuready";
 import { CompatibilityBadge } from "./CompatibilityBadge";
+import { GameArt } from "./GameArt";
 
 /** A glossy game tile for the channel grid. */
 export function GameCard({
@@ -26,19 +26,11 @@ export function GameCard({
       className="channel-tile group flex flex-col focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/40"
     >
       <div className="relative aspect-3/4 w-full overflow-hidden bg-canvas">
-        {art ? (
-          <Image
-            src={art}
-            alt={game.title}
-            fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-ink-soft">
-            No art
-          </div>
-        )}
+        <GameArt
+          src={art}
+          alt={game.title}
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+        />
         {rank != null && (
           <div className="absolute right-2 top-2 z-10">
             <CompatibilityBadge rank={rank} size="sm" />

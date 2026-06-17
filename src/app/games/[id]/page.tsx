@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -15,6 +14,7 @@ import { emuReadyGameUrl, gameNativeSearchUrl } from "@/lib/links";
 import { ListingCard } from "@/components/ListingCard";
 import { CompatibilityBadge } from "@/components/CompatibilityBadge";
 import { SaveGameButton } from "@/components/SaveGameButton";
+import { GameArt } from "@/components/GameArt";
 
 export async function generateMetadata({
   params,
@@ -68,13 +68,7 @@ export default async function GamePage({
       {/* Header */}
       <div className="flex flex-col gap-6 sm:flex-row">
         <div className="relative mx-auto aspect-3/4 w-44 shrink-0 overflow-hidden rounded-3xl shadow-soft sm:mx-0">
-          {art ? (
-            <Image src={art} alt={game.title} fill sizes="176px" className="object-cover" />
-          ) : (
-            <div className="flex h-full items-center justify-center bg-canvas text-ink-soft">
-              No art
-            </div>
-          )}
+          <GameArt src={art} alt={game.title} sizes="176px" priority />
         </div>
 
         <div className="flex flex-1 flex-col gap-3">

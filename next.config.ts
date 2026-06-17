@@ -4,13 +4,12 @@ const nextConfig: NextConfig = {
   // Produce a self-contained build for a small Docker image.
   output: "standalone",
   images: {
-    // Box art / banners served by EmuReady come from these CDNs.
-    remotePatterns: [
-      { protocol: "https", hostname: "cdn.thegamesdb.net" },
-      { protocol: "https", hostname: "media.rawg.io" },
-      { protocol: "https", hostname: "*.emuready.com" },
-      { protocol: "https", hostname: "img.youtube.com" },
-    ],
+    // EmuReady art is served by a shifting set of third-party CDNs
+    // (thegamesdb, rawg, …). Allow any HTTPS host so the optimizer never
+    // rejects an unknown source; GameArt handles per-image load failures.
+    remotePatterns: [{ protocol: "https", hostname: "**" }],
+    // Cache optimized images for a day to cut repeat fetches to those CDNs.
+    minimumCacheTTL: 86_400,
   },
 };
 
