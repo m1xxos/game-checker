@@ -58,7 +58,7 @@ export default async function DashboardPage({
   // systems in the library, excluding games already saved.
   let recommended: Recommendation[] = [];
   if (active) {
-    const listings = await getListingsByDevice(active.deviceId, 120).catch(
+    const listings = await getListingsByDevice(active.deviceId, 100).catch(
       () => [],
     );
     recommended = recommendGames(listings, active, {

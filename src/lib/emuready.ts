@@ -196,17 +196,33 @@ export async function getListingsByGame(
   return data?.listings ?? [];
 }
 
-/** All compatibility listings tested on a specific device. */
+/**
+ * Compatibility listings tested on a specific device. `listings.get` caps the
+ * page size at 50, so we paginate (cached) to gather up to `count`, stopping as
+ * soon as the API reports no further pages.
+ */
 export async function getListingsByDevice(
   deviceId: string,
-  limit = 60,
+  count = 100,
 ): Promise<Listing[]> {
-  const data = await emuReadyFetch<{ listings: Listing[] }>(
-    "listings.get",
-    { deviceIds: [deviceId], limit },
-    { revalidate: 1800 },
-  );
-  return data?.listings ?? [];
+  const PER_PAGE = 50;
+  const maxPages = Math.min(Math.ceil(count / PER_PAGE), 3); // cap API calls
+  const all: Listing[] = [];
+
+  for (let page = 1; page <= maxPages; page++) {
+    const data = await emuReadyFetch<{
+      listings: Listing[];
+      pagination?: { hasNextPage?: boolean };
+    }>(
+      "listings.get",
+      { deviceIds: [deviceId], limit: PER_PAGE, page },
+      { revalidate: 1800 },
+    );
+    const batch = data?.listings ?? [];
+    all.push(...batch);
+    if (batch.length < PER_PAGE || !data?.pagination?.hasNextPage) break;
+  }
+  return all;
 }
 
 /** Featured listings for the landing page. */
