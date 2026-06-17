@@ -6,7 +6,8 @@
  * compatibility search page (best-effort prefilled with the game title).
  */
 
-import { EMUREADY_SITE } from "./emuready";
+/** EmuReady's public site origin (for outbound links). */
+const EMUREADY_SITE = "https://www.emuready.com";
 
 /** Link to a game's page on EmuReady (full community compatibility reports). */
 export function emuReadyGameUrl(gameId: string): string {

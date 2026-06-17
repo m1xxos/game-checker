@@ -37,7 +37,7 @@ export default async function SignInPage() {
               key={provider}
               action={async () => {
                 "use server";
-                await signIn(provider, { redirectTo: "/consoles" });
+                await signIn(provider, { redirectTo: "/welcome" });
               }}
             >
               <button

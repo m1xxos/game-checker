@@ -17,9 +17,6 @@ import "server-only";
 const BASE_URL =
   process.env.EMUREADY_BASE_URL ?? "https://www.emuready.com/api/mobile/trpc";
 
-/** Public site origin, used to build outbound "view on EmuReady" links. */
-export const EMUREADY_SITE = "https://www.emuready.com";
-
 // --- Types (subset of the API surface we use) -------------------------------
 
 export interface System {
