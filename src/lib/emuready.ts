@@ -156,7 +156,8 @@ export async function searchGames(query: string, limit = 20): Promise<Game[]> {
   const data = await emuReadyFetch<Game[]>(
     "games.searchGames",
     { query, limit },
-    { revalidate: 600 },
+    // Search results change slowly; cache for an hour to spare the API.
+    { revalidate: 3600 },
   );
   return data ?? [];
 }

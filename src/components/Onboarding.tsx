@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addConsole, searchDevicesAction } from "@/lib/actions";
+import { addConsole } from "@/lib/actions";
+import { useDeviceSearch } from "@/lib/useDeviceSearch";
 import type { DeviceSummary } from "@/lib/emuready";
 
 type Step = "intro" | "console" | "done";
@@ -111,26 +112,9 @@ function IntroStep({
 
 function ConsoleStep({ onAdded }: { onAdded: (name: string) => void }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<DeviceSummary[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { results, loading } = useDeviceSearch(query);
   const [adding, setAdding] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    const t = setTimeout(async () => {
-      const devices = await searchDevicesAction(query);
-      if (!cancelled) {
-        setResults(devices);
-        setLoading(false);
-      }
-    }, 400);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [query]);
 
   function add(device: DeviceSummary) {
     setAdding(device.id);

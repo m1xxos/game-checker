@@ -1,36 +1,18 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addConsole, searchDevicesAction } from "@/lib/actions";
-import type { DeviceSummary } from "@/lib/emuready";
+import { addConsole } from "@/lib/actions";
+import { useDeviceSearch } from "@/lib/useDeviceSearch";
 
 /** Searchable device picker that adds a console to the user's account. */
 export function AddConsole({ savedDeviceIds }: { savedDeviceIds: string[] }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<DeviceSummary[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { results, loading } = useDeviceSearch(query);
   const [adding, setAdding] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const saved = new Set(savedDeviceIds);
-
-  // Debounced search against the EmuReady device catalog.
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    const t = setTimeout(async () => {
-      const devices = await searchDevicesAction(query);
-      if (!cancelled) {
-        setResults(devices);
-        setLoading(false);
-      }
-    }, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [query]);
 
   function add(deviceId: string) {
     setAdding(deviceId);
