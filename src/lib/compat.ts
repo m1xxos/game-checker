@@ -140,6 +140,24 @@ export interface Recommendation {
   reportCount: number;
   /** True when at least one report is on the exact device (not just chipset). */
   exact: boolean;
+  /** Set when this game was boosted by the user's library (system affinity). */
+  becauseOfSystem?: string;
+}
+
+export interface RecommendOptions {
+  limit?: number;
+  /** Games to omit (e.g. already in the user's library). */
+  excludeGameIds?: Set<string>;
+  /**
+   * Systems the user plays, mapped to how many library games they have on each.
+   * Games on these systems are boosted so recommendations reflect taste.
+   */
+  boostSystems?: Map<string, number>;
+  /**
+   * Worst performance rank to allow. Default 3 (Playable+). Pass 2 to keep only
+   * games that run great or perfect ("definitely runs well").
+   */
+  maxRank?: number;
 }
 
 interface Agg {
@@ -168,8 +186,9 @@ interface Agg {
 export function recommendGames(
   listings: Listing[],
   console: { deviceId: string; socName?: string | null } | null,
-  limit = 18,
+  opts: RecommendOptions = {},
 ): Recommendation[] {
+  const { limit = 18, excludeGameIds, boostSystems, maxRank = 3 } = opts;
   const { exact, similar } = matchListingsToConsole(listings, console);
   // Same-chipset reports are a strong proxy but rate slightly below the exact
   // device they were measured on.
@@ -181,6 +200,7 @@ export function recommendGames(
   const byGame = new Map<string, Agg>();
   for (const { l, weight, exact: isExact } of weighted) {
     if (!l.game) continue;
+    if (excludeGameIds?.has(l.game.id)) continue;
     const rank = l.performance?.rank ?? 99;
     const created = Date.parse(l.createdAt ?? "") || 0;
     const cur = byGame.get(l.game.id);
@@ -211,20 +231,26 @@ export function recommendGames(
   const now = Date.now();
   const recs: Recommendation[] = [];
   for (const a of byGame.values()) {
-    // Keep only games that are at least Playable on this console.
-    if (tierFromRank(a.bestRank) === "partial" || tierFromRank(a.bestRank) === "none") {
-      continue;
-    }
+    // Honor the quality threshold (default Playable+, or Great+ when maxRank=2).
+    if (a.bestRank > maxRank) continue;
+
     const base = tierPoints(a.bestRank) * a.bestWeight;
     const confidence = Math.min(a.reportCount, 5) * 4; // up to +20
     const community = Math.max(-10, Math.min(20, a.upvotes - a.downvotes));
     const recency = a.newest && now - a.newest < 120 * DAY_MS ? 8 : 0;
+
+    // Boost games on systems the user plays (taste affinity from the library).
+    const systemName = a.game.system?.name;
+    const affinity = systemName ? (boostSystems?.get(systemName) ?? 0) : 0;
+    const multiplier = 1 + Math.min(affinity, 4) * 0.2; // up to +80%
+
     recs.push({
       game: a.game,
       rank: a.bestRank,
       reportCount: a.reportCount,
       exact: a.exact,
-      score: base + confidence + community + recency,
+      score: (base + confidence + community + recency) * multiplier,
+      becauseOfSystem: affinity > 0 ? systemName : undefined,
     });
   }
 
