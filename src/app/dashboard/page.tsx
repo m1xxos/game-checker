@@ -1,23 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getListingsByDevice } from "@/lib/emuready";
-import { getActiveConsole, getSavedGames, currentUserId } from "@/lib/user-data";
-import {
-  recommendGames,
-  normalizeTitle,
-  type Recommendation,
-} from "@/lib/compat";
+import { getSavedGames, currentUserId } from "@/lib/user-data";
 import { GameCard } from "@/components/GameCard";
 import { ChannelGrid } from "@/components/ChannelGrid";
-import { RunsWellToggle } from "@/components/RunsWellToggle";
 
 export const metadata: Metadata = { title: "Library — Game Checker" };
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ well?: string }>;
-}) {
+export default async function DashboardPage() {
   const userId = await currentUserId();
 
   if (!userId) {
@@ -37,61 +26,30 @@ export default async function DashboardPage({
     );
   }
 
-  const { well } = await searchParams;
-  const runsWellOnly = well === "1";
-
-  const [active, saved] = await Promise.all([
-    getActiveConsole(),
-    getSavedGames(),
-  ]);
-
-  // What the user plays: count library games per system to bias recommendations.
-  const librarySystems = new Map<string, number>();
-  for (const s of saved) {
-    if (s.systemName) {
-      librarySystems.set(s.systemName, (librarySystems.get(s.systemName) ?? 0) + 1);
-    }
-  }
-  // Most-played systems, for the section subtitle.
-  const topSystems = [...librarySystems.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([name]) => name);
-
-  // Recommendations from the single device fetch: scored, boosted toward the
-  // systems in the library, excluding games already saved.
-  let recommended: Recommendation[] = [];
-  if (active) {
-    const listings = await getListingsByDevice(active.deviceId, 100).catch(
-      () => [],
-    );
-    recommended = recommendGames(listings, active, {
-      limit: 24,
-      excludeGameIds: new Set(saved.map((s) => s.gameId)),
-      // Exclude by title too, so a game saved on one platform doesn't reappear
-      // as its port on another (e.g. Hades on Windows vs. Switch).
-      excludeTitles: new Set(saved.map((s) => normalizeTitle(s.title))),
-      boostSystems: librarySystems,
-      maxRank: runsWellOnly ? 2 : 3,
-    });
-  }
-
-  const hasLibraryTaste = topSystems.length > 0;
+  const saved = await getSavedGames();
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <section className="space-y-4">
-        <div className="flex items-end justify-between">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-3xl font-extrabold">Your library</h1>
             <p className="text-ink-soft">Games you saved to check later.</p>
           </div>
-          <Link
-            href="/search"
-            className="text-sm font-bold text-primary-strong hover:underline"
-          >
-            Find more →
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              href="/recommendations"
+              className="rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-soft transition hover:bg-primary-strong"
+            >
+              ✨ Recommendations
+            </Link>
+            <Link
+              href="/search"
+              className="rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-bold transition hover:border-primary"
+            >
+              Find more
+            </Link>
+          </div>
         </div>
 
         {saved.length === 0 ? (
@@ -115,59 +73,6 @@ export default async function DashboardPage({
                     : undefined,
                 }}
               />
-            ))}
-          </ChannelGrid>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-extrabold">
-              {!active
-                ? "Recommended for you"
-                : hasLibraryTaste
-                  ? "Because of your library"
-                  : `Runs great on your ${active.modelName}`}
-            </h2>
-            <p className="text-ink-soft">
-              {!active
-                ? "Pick a console to personalize."
-                : hasLibraryTaste
-                  ? `More ${topSystems.join(", ")} games that run well on your ${active.modelName}.`
-                  : `Standout games on your ${active.modelName}.`}
-            </p>
-          </div>
-          {active && <RunsWellToggle runsWellOnly={runsWellOnly} />}
-        </div>
-
-        {!active ? (
-          <div className="card-surface p-8 text-center text-ink-soft">
-            <Link href="/consoles" className="font-bold text-primary-strong underline">
-              Pick your console
-            </Link>{" "}
-            to get personalized recommendations.
-          </div>
-        ) : recommended.length === 0 ? (
-          <div className="card-surface p-8 text-center text-ink-soft">
-            {runsWellOnly
-              ? "No games are confirmed to run great here yet. "
-              : "No standout reports for this console yet. "}
-            {runsWellOnly ? (
-              <Link href="/dashboard" className="font-bold text-primary-strong underline">
-                Show all playable games
-              </Link>
-            ) : (
-              <Link href="/search" className="font-bold text-primary-strong underline">
-                Browse games
-              </Link>
-            )}
-            .
-          </div>
-        ) : (
-          <ChannelGrid>
-            {recommended.map(({ game, rank }) => (
-              <GameCard key={game.id} game={game} rank={rank} />
             ))}
           </ChannelGrid>
         )}

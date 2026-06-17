@@ -6,6 +6,7 @@ import { ConsoleSwitcher } from "./ConsoleSwitcher";
 
 const NAV = [
   { href: "/search", label: "Browse" },
+  { href: "/recommendations", label: "For You" },
   { href: "/consoles", label: "My Consoles" },
   { href: "/dashboard", label: "Library" },
 ];
