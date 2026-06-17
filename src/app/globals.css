@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+/*
+  "Wii-like" light theme: bright, airy, friendly. Lots of white, soft sky-blue
+  wash, rounded everything, gentle shadows, a clear blue primary accent.
+*/
+
+@theme {
+  --color-canvas: #eef4fb;
+  --color-surface: #ffffff;
+  --color-ink: #1b2733;
+  --color-ink-soft: #5b6b7b;
+  --color-line: #e3ebf3;
+
+  --color-primary: #2b8fe6;
+  --color-primary-strong: #1c6fc4;
+  --color-primary-soft: #e7f2fd;
+
+  --color-accent: #ff8a5b;
+
+  --radius-card: 1.75rem;
+
+  --shadow-soft: 0 10px 30px -12px rgba(27, 64, 110, 0.25);
+  --shadow-lift: 0 18px 40px -14px rgba(27, 64, 110, 0.35);
+
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  min-height: 100%;
+  color: var(--color-ink);
+  background:
+    radial-gradient(1100px 540px at 50% -8%, #ffffff 0%, var(--color-canvas) 60%),
+    var(--color-canvas);
+  font-family: var(--font-sans);
+}
+
+/* Thin, friendly scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c7d6e6 transparent;
+}
+
+@layer components {
+  .card-surface {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-soft);
+  }
+
+  /* Glossy "channel" tile — the signature Wii look. */
+  .channel-tile {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-soft);
+    transition:
+      transform 0.25s ease,
+      box-shadow 0.25s ease;
+  }
+  .channel-tile:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lift);
+  }
+  /* Top highlight sheen. */
+  .channel-tile::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 42%;
+    background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.55),
+      rgba(255, 255, 255, 0)
+    );
+    pointer-events: none;
+  }
+}

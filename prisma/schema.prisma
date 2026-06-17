@@ -1,0 +1,99 @@
+// Game Checker schema.
+// - Auth.js (NextAuth v5) adapter models: User, Account, Session, VerificationToken
+// - App models: ConsoleProfile (a saved Android handheld), SavedGame (wishlist)
+// Docs: https://authjs.dev/getting-started/adapters/prisma
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+
+  accounts Account[]
+  sessions Session[]
+  consoles ConsoleProfile[]
+  saved    SavedGame[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+/// A user's saved Android handheld console. Mirrors an EmuReady device plus a
+/// cached snapshot of its hardware so we can match listings and prefill
+/// GameNative links without re-fetching the device every render.
+model ConsoleProfile {
+  id           String   @id @default(cuid())
+  userId       String
+  deviceId     String // EmuReady device id
+  modelName    String
+  brandName    String
+  socName      String?
+  gpuModel     String?
+  isActive     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+}
+
+/// A game a user wants to check later (wishlist). Caches title/art so the
+/// library renders without an extra EmuReady round-trip.
+model SavedGame {
+  id        String   @id @default(cuid())
+  userId    String
+  gameId    String // EmuReady game id
+  title     String
+  boxartUrl String?
+  systemName String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@index([userId])
+}
