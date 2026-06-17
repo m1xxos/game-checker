@@ -6,7 +6,7 @@
  *   1 Perfect · 2 Great · 3 Playable · 5 Ingame · 8 Nothing
  */
 
-import type { Listing } from "./emuready";
+import type { Game, Listing } from "./emuready";
 
 export type CompatTier = "perfect" | "great" | "playable" | "partial" | "none";
 
@@ -108,4 +108,127 @@ export function sortByQuality(listings: Listing[]): Listing[] {
     if (ra !== rb) return ra - rb;
     return (b.upvoteCount ?? 0) - (a.upvoteCount ?? 0);
   });
+}
+
+// --- Recommendations --------------------------------------------------------
+
+/** Points awarded for a listing's performance tier (higher is better). */
+function tierPoints(rank: number | undefined): number {
+  switch (tierFromRank(rank)) {
+    case "perfect":
+      return 100;
+    case "great":
+      return 82;
+    case "playable":
+      return 60;
+    case "partial":
+      return 28;
+    default:
+      return 5;
+  }
+}
+
+const DAY_MS = 86_400_000;
+
+export interface Recommendation {
+  game: Game;
+  /** Best (lowest) performance rank seen for this game on the console. */
+  rank: number;
+  /** Composite score used for ranking (higher is better). */
+  score: number;
+  /** How many relevant reports back this recommendation. */
+  reportCount: number;
+  /** True when at least one report is on the exact device (not just chipset). */
+  exact: boolean;
+}
+
+interface Agg {
+  game: Game;
+  bestRank: number;
+  bestWeight: number;
+  reportCount: number;
+  upvotes: number;
+  downvotes: number;
+  newest: number;
+  exact: boolean;
+}
+
+/**
+ * Rank games to recommend for a console from its listings.
+ *
+ * A game's score blends four signals so that a single lucky report can't
+ * outrank a broadly-corroborated one:
+ *   - performance tier (the dominant factor), weighted down for chipset-only
+ *     matches since they're a proxy rather than the exact device;
+ *   - confidence from the number of corroborating reports;
+ *   - community votes (upvotes minus downvotes); and
+ *   - a small recency boost for reports from the last few months.
+ * Only games that are at least "Playable" are returned.
+ */
+export function recommendGames(
+  listings: Listing[],
+  console: { deviceId: string; socName?: string | null } | null,
+  limit = 18,
+): Recommendation[] {
+  const { exact, similar } = matchListingsToConsole(listings, console);
+  // Same-chipset reports are a strong proxy but rate slightly below the exact
+  // device they were measured on.
+  const weighted = [
+    ...exact.map((l) => ({ l, weight: 1, exact: true })),
+    ...similar.map((l) => ({ l, weight: 0.85, exact: false })),
+  ];
+
+  const byGame = new Map<string, Agg>();
+  for (const { l, weight, exact: isExact } of weighted) {
+    if (!l.game) continue;
+    const rank = l.performance?.rank ?? 99;
+    const created = Date.parse(l.createdAt ?? "") || 0;
+    const cur = byGame.get(l.game.id);
+    if (!cur) {
+      byGame.set(l.game.id, {
+        game: l.game,
+        bestRank: rank,
+        bestWeight: weight,
+        reportCount: 1,
+        upvotes: l.upvoteCount ?? 0,
+        downvotes: l.downvoteCount ?? 0,
+        newest: created,
+        exact: isExact,
+      });
+    } else {
+      if (rank < cur.bestRank) {
+        cur.bestRank = rank;
+        cur.bestWeight = weight;
+      }
+      cur.reportCount += 1;
+      cur.upvotes += l.upvoteCount ?? 0;
+      cur.downvotes += l.downvoteCount ?? 0;
+      cur.newest = Math.max(cur.newest, created);
+      cur.exact = cur.exact || isExact;
+    }
+  }
+
+  const now = Date.now();
+  const recs: Recommendation[] = [];
+  for (const a of byGame.values()) {
+    // Keep only games that are at least Playable on this console.
+    if (tierFromRank(a.bestRank) === "partial" || tierFromRank(a.bestRank) === "none") {
+      continue;
+    }
+    const base = tierPoints(a.bestRank) * a.bestWeight;
+    const confidence = Math.min(a.reportCount, 5) * 4; // up to +20
+    const community = Math.max(-10, Math.min(20, a.upvotes - a.downvotes));
+    const recency = a.newest && now - a.newest < 120 * DAY_MS ? 8 : 0;
+    recs.push({
+      game: a.game,
+      rank: a.bestRank,
+      reportCount: a.reportCount,
+      exact: a.exact,
+      score: base + confidence + community + recency,
+    });
+  }
+
+  return recs
+    .sort((x, y) => y.score - x.score || y.reportCount - x.reportCount)
+    .slice(0, limit);
 }

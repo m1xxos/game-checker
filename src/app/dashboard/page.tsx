@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getListingsByDevice, type Game } from "@/lib/emuready";
+import { getListingsByDevice } from "@/lib/emuready";
 import { getActiveConsole, getSavedGames, currentUserId } from "@/lib/user-data";
+import { recommendGames, type Recommendation } from "@/lib/compat";
 import { GameCard } from "@/components/GameCard";
 import { ChannelGrid } from "@/components/ChannelGrid";
 
@@ -32,21 +33,14 @@ export default async function DashboardPage() {
     getSavedGames(),
   ]);
 
-  // Recommendations: games that run well (rank ≤ 3) on the active console,
-  // de-duplicated keeping the best rank per game.
-  let recommended: { game: Game; rank: number }[] = [];
+  // Recommendations: score games by performance, corroboration, votes and
+  // recency for the active console (see recommendGames). One device fetch.
+  let recommended: Recommendation[] = [];
   if (active) {
-    const listings = await getListingsByDevice(active.deviceId, 80).catch(
+    const listings = await getListingsByDevice(active.deviceId, 100).catch(
       () => [],
     );
-    const byGame = new Map<string, { game: Game; rank: number }>();
-    for (const l of listings) {
-      const rank = l.performance?.rank ?? 99;
-      if (!l.game || rank > 3) continue; // keep only Perfect/Great/Playable
-      const prev = byGame.get(l.game.id);
-      if (!prev || rank < prev.rank) byGame.set(l.game.id, { game: l.game, rank });
-    }
-    recommended = [...byGame.values()].sort((a, b) => a.rank - b.rank).slice(0, 18);
+    recommended = recommendGames(listings, active, 18);
   }
 
   return (
