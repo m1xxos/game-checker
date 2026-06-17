@@ -10,7 +10,13 @@ import {
   tierStyle,
   type CompatTier,
 } from "@/lib/compat";
-import { emuReadyGameUrl, GAMENATIVE_COMPATIBILITY_URL } from "@/lib/links";
+import {
+  emuReadyGameUrl,
+  GAMENATIVE_COMPATIBILITY_URL,
+  isWindowsGame,
+  steamSearchUrl,
+  steamDbSearchUrl,
+} from "@/lib/links";
 import { ListingCard } from "@/components/ListingCard";
 import { CompatibilityBadge } from "@/components/CompatibilityBadge";
 import { SaveGameButton } from "@/components/SaveGameButton";
@@ -102,6 +108,26 @@ export default async function GamePage({
               Full reports on EmuReady ↗
             </a>
             <GameNativeButton title={game.title} />
+            {isWindowsGame(game.system) && (
+              <>
+                <a
+                  href={steamSearchUrl(game.title)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-line bg-surface px-4 py-2.5 text-sm font-bold transition hover:border-primary"
+                >
+                  Steam ↗
+                </a>
+                <a
+                  href={steamDbSearchUrl(game.title)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-line bg-surface px-4 py-2.5 text-sm font-bold transition hover:border-primary"
+                >
+                  SteamDB ↗
+                </a>
+              </>
+            )}
           </div>
         </div>
       </div>

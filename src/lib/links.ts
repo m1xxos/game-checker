@@ -32,3 +32,31 @@ export function emuReadyListingsUrl(): string {
  * copy the title to the clipboard for the user to paste — see GameNativeButton.
  */
 export const GAMENATIVE_COMPATIBILITY_URL = "https://gamenative.app/compatibility/";
+
+/** True for PC/Windows titles (where Steam / SteamDB links make sense). */
+export function isWindowsGame(system?: {
+  key?: string;
+  name?: string;
+}): boolean {
+  if (!system) return false;
+  const key = system.key?.toLowerCase() ?? "";
+  const name = system.name?.toLowerCase() ?? "";
+  return (
+    key.includes("windows") ||
+    key.includes("pc") ||
+    /\bwindows\b|\bpc\b/.test(name)
+  );
+}
+
+/**
+ * Steam store search for a title. EmuReady doesn't give us a Steam app id, so we
+ * search by name (lands on the store page / results).
+ */
+export function steamSearchUrl(title: string): string {
+  return `https://store.steampowered.com/search/?term=${encodeURIComponent(title)}`;
+}
+
+/** SteamDB app search for a title. */
+export function steamDbSearchUrl(title: string): string {
+  return `https://steamdb.info/search/?a=app&q=${encodeURIComponent(title)}`;
+}
