@@ -10,10 +10,11 @@ import {
   tierStyle,
   type CompatTier,
 } from "@/lib/compat";
-import { emuReadyGameUrl, gameNativeSearchUrl } from "@/lib/links";
+import { emuReadyGameUrl, GAMENATIVE_COMPATIBILITY_URL } from "@/lib/links";
 import { ListingCard } from "@/components/ListingCard";
 import { CompatibilityBadge } from "@/components/CompatibilityBadge";
 import { SaveGameButton } from "@/components/SaveGameButton";
+import { GameNativeButton } from "@/components/GameNativeButton";
 import { GameArt } from "@/components/GameArt";
 
 export async function generateMetadata({
@@ -100,14 +101,7 @@ export default async function GamePage({
             >
               Full reports on EmuReady ↗
             </a>
-            <a
-              href={gameNativeSearchUrl(game.title, active?.gpuModel ?? undefined)}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-full border border-line bg-surface px-4 py-2.5 text-sm font-bold transition hover:border-accent"
-            >
-              Check on GameNative ↗
-            </a>
+            <GameNativeButton title={game.title} />
           </div>
         </div>
       </div>
@@ -185,7 +179,7 @@ export default async function GamePage({
         <p className="text-ink-soft">
           No community reports yet. Try{" "}
           <a
-            href={gameNativeSearchUrl(game.title)}
+            href={GAMENATIVE_COMPATIBILITY_URL}
             target="_blank"
             rel="noreferrer"
             className="font-bold text-primary-strong underline"

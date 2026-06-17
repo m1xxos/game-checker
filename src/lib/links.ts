@@ -24,13 +24,10 @@ export function emuReadyListingsUrl(): string {
 }
 
 /**
- * Link to GameNative's compatibility search, prefilled with the game title (and
- * GPU model when we know the user's console). The site ignores params it does
- * not understand, so the base URL always resolves to the search page.
+ * GameNative's compatibility page. Its filters are a client-side app that does
+ * NOT hydrate from the URL (verified: initial filter state is hard-coded null
+ * and nothing reads `useSearchParams`), so a `?q=`/`?gpu=` deep link just lands
+ * on the empty "add a filter" screen. We therefore link to the bare page and
+ * copy the title to the clipboard for the user to paste — see GameNativeButton.
  */
-export function gameNativeSearchUrl(title: string, gpuModel?: string): string {
-  const url = new URL("https://gamenative.app/compatibility/");
-  if (title) url.searchParams.set("q", title);
-  if (gpuModel) url.searchParams.set("gpu", gpuModel);
-  return url.toString();
-}
+export const GAMENATIVE_COMPATIBILITY_URL = "https://gamenative.app/compatibility/";
