@@ -26,6 +26,7 @@ model User {
   sessions Session[]
   consoles ConsoleProfile[]
   saved    SavedGame[]
+  steam    SteamProfile?
 }
 
 model Account {
@@ -95,10 +96,84 @@ model SavedGame {
   title     String
   boxartUrl String?
   systemName String?
+  /// Where this save came from: "manual" (the ☆ button) or "steam" (import).
+  source    String   @default("manual")
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, gameId])
   @@index([userId])
+}
+
+/// A linked Steam account (one per user). Kept out of `User` so disconnecting is
+/// a single cascading delete and the Auth.js-shaped User table stays untouched.
+model SteamProfile {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  steamId64   String    @unique // 17-digit SteamID64
+  vanityUrl   String? // the /id/<vanity> slug, when that's how they linked
+  personaName String?
+  avatarUrl   String?
+  /// Null until the first successful import; also throttles re-syncs.
+  syncedAt    DateTime?
+  /// game_count from the last GetOwnedGames response.
+  gameCount   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  games SteamGame[]
+
+  @@index([userId])
+}
+
+/// One owned Steam game, per user. A mirror of IPlayerService/GetOwnedGames:
+/// re-synced wholesale, never hand-edited except for `selected`.
+model SteamGame {
+  id              String    @id @default(cuid())
+  profileId       String
+  /// Denormalized so per-user reads never join through SteamProfile.
+  userId          String
+  appId           Int
+  name            String
+  playtimeMinutes Int       @default(0)
+  lastPlayedAt    DateTime?
+  /// Steam's icon hash; the URL is derived (see steamIconUrl()).
+  iconHash        String?
+  /// True when the user ticked this game during import ("I've played this").
+  selected        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  profile SteamProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  app     SteamApp     @relation(fields: [appId], references: [appId])
+
+  @@unique([userId, appId])
+  @@index([userId, playtimeMinutes(sort: Desc)])
+  @@index([appId])
+}
+
+/// Global, user-independent cache for one Steam app: store metadata from the
+/// rate-limited appdetails endpoint plus the EmuReady game we matched it to.
+/// Shared across every user who owns the app, so a popular title resolves once.
+model SteamApp {
+  appId            Int       @id
+  name             String
+  /// Store genres ("Action", "RPG", …), fetched with l=english so the strings are
+  /// stable across locales. Empty until detailsFetchedAt is set.
+  genres           String[]
+  categories       String[]
+  /// Set once appdetails has been attempted — including failures, so a delisted
+  /// app is negatively cached instead of retried forever.
+  detailsFetchedAt DateTime?
+  /// Matched EmuReady game (Windows catalog), or null when we looked and missed.
+  emuGameId        String?
+  emuTitle         String?
+  /// Set whenever a match was attempted, even if emuGameId stayed null.
+  matchedAt        DateTime?
+  updatedAt        DateTime  @updatedAt
+
+  owners SteamGame[]
+
+  @@index([detailsFetchedAt])
+  @@index([matchedAt])
 }

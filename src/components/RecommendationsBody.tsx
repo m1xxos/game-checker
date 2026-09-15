@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getSavedGames } from "@/lib/user-data";
+import { getSavedGames, currentUserId } from "@/lib/user-data";
+import { getSteamTaste } from "@/lib/steam-taste";
 import { loadConsolePool } from "@/lib/recommendation-data";
 import { recommendGames, recentlyTested, normalizeTitle } from "@/lib/compat";
 import type { ConsoleRef } from "@/lib/compat";
@@ -27,9 +28,12 @@ export async function RecommendationsBody({
 }) {
   const maxRank = QUALITY_RANK[settings.quality];
 
-  const [saved, pool] = await Promise.all([
+  const userId = await currentUserId();
+  const [saved, pool, taste] = await Promise.all([
     getSavedGames(),
     loadConsolePool(consoleRef, { maxRank }),
+    // Optional: only present once a Steam library has been imported and enriched.
+    userId ? getSteamTaste(userId).catch(() => null) : null,
   ]);
 
   const librarySystems = new Map<string, number>();
@@ -55,6 +59,8 @@ export async function RecommendationsBody({
     excludeGameIds,
     excludeTitles,
     boostSystems: settings.taste ? librarySystems : undefined,
+    titleAffinity: settings.taste ? taste?.titleAffinity : undefined,
+    titleAffinityReason: settings.taste ? taste?.titleAffinityReason : undefined,
     maxRank,
   });
 

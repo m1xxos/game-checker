@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth, signOut } from "@/auth";
+import { steamEnabled } from "@/lib/steam";
 import { getConsoles } from "@/lib/user-data";
 import { SearchBar } from "./SearchBar";
 import { ConsoleSwitcher } from "./ConsoleSwitcher";
@@ -11,9 +12,15 @@ const NAV = [
   { href: "/dashboard", label: "Library" },
 ];
 
+/** Steam only appears when the server is configured for it. */
+function navItems(): { href: string; label: string }[] {
+  return steamEnabled() ? [...NAV, { href: "/steam", label: "Steam" }] : NAV;
+}
+
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const session = await auth();
   const consoles = session?.user ? await getConsoles() : [];
+  const nav = navItems();
 
   return (
     <div className="flex min-h-full flex-col">
@@ -33,7 +40,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="ml-auto hidden items-center gap-1 lg:flex">
-            {NAV.map((item) => (
+            {nav.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

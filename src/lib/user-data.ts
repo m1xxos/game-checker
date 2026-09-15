@@ -1,7 +1,13 @@
 import "server-only";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import type { ConsoleProfile, SavedGame } from "@/generated/prisma/client";
+import type {
+  ConsoleProfile,
+  SavedGame,
+  SteamApp,
+  SteamGame,
+  SteamProfile,
+} from "@/generated/prisma/client";
 
 /** Current user id, or null when signed out. */
 export async function currentUserId(): Promise<string | null> {
@@ -50,4 +56,26 @@ export async function savedGameIds(): Promise<Set<string>> {
     select: { gameId: true },
   });
   return new Set(rows.map((r) => r.gameId));
+}
+
+// --- Steam ------------------------------------------------------------------
+
+export async function getSteamProfile(): Promise<SteamProfile | null> {
+  const userId = await currentUserId();
+  if (!userId) return null;
+  return prisma.steamProfile.findUnique({ where: { userId } });
+}
+
+/** The user's imported Steam games, most-played first, with the global app cache. */
+export async function getSteamGames(
+  opts: { selectedOnly?: boolean; take?: number } = {},
+): Promise<(SteamGame & { app: SteamApp })[]> {
+  const userId = await currentUserId();
+  if (!userId) return [];
+  return prisma.steamGame.findMany({
+    where: { userId, ...(opts.selectedOnly ? { selected: true } : {}) },
+    orderBy: { playtimeMinutes: "desc" },
+    include: { app: true },
+    ...(opts.take ? { take: opts.take } : {}),
+  });
 }

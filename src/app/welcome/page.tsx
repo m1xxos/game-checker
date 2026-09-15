@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { getConsoles } from "@/lib/user-data";
 import { Onboarding } from "@/components/Onboarding";
+import { steamEnabled } from "@/lib/steam";
 
 export const metadata: Metadata = { title: "Welcome — Game Checker" };
 
@@ -16,7 +17,7 @@ export default async function WelcomePage() {
 
   return (
     <div className="py-6">
-      <Onboarding userName={session.user.name} />
+      <Onboarding userName={session.user.name} steamEnabled={steamEnabled()} />
     </div>
   );
 }

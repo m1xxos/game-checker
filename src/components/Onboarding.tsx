@@ -5,33 +5,52 @@ import { useRouter } from "next/navigation";
 import { addConsole } from "@/lib/actions";
 import { useDeviceSearch } from "@/lib/useDeviceSearch";
 import type { DeviceSummary } from "@/lib/emuready";
+import { SteamConnect } from "./SteamConnect";
+import { SteamImport } from "./SteamImport";
 
-type Step = "intro" | "console" | "done";
+type Step = "intro" | "console" | "steam" | "done";
 
-/** Guided first-run setup: explain the app, then add the first console. */
-export function Onboarding({ userName }: { userName?: string | null }) {
+/**
+ * Guided first-run setup: explain the app, add the first console, and (when the
+ * server supports it) offer a Steam import.
+ *
+ * The Steam step is always skippable, and needs no "has skipped" flag: /welcome
+ * already decides onboarding is finished once the user has at least one console,
+ * so skipping here is never re-prompted.
+ */
+export function Onboarding({
+  userName,
+  steamEnabled = false,
+}: {
+  userName?: string | null;
+  steamEnabled?: boolean;
+}) {
   const [step, setStep] = useState<Step>("intro");
   const [addedName, setAddedName] = useState<string | null>(null);
   const router = useRouter();
 
+  const order: Step[] = steamEnabled
+    ? ["intro", "console", "steam", "done"]
+    : ["intro", "console", "done"];
+
+  function afterConsole(name: string) {
+    setAddedName(name);
+    setStep(steamEnabled ? "steam" : "done");
+  }
+
   return (
     <div className="card-surface mx-auto max-w-xl overflow-hidden">
-      <StepDots step={step} />
+      <StepDots step={step} order={order} />
       <div className="p-6 sm:p-8">
         {step === "intro" && (
           <IntroStep userName={userName} onNext={() => setStep("console")} />
         )}
-        {step === "console" && (
-          <ConsoleStep
-            onAdded={(name) => {
-              setAddedName(name);
-              setStep("done");
-            }}
-          />
-        )}
+        {step === "console" && <ConsoleStep onAdded={afterConsole} />}
+        {step === "steam" && <SteamStep onNext={() => setStep("done")} />}
         {step === "done" && (
           <DoneStep
             consoleName={addedName}
+            steamEnabled={steamEnabled}
             onFinish={() => {
               router.push("/dashboard");
               router.refresh();
@@ -43,8 +62,7 @@ export function Onboarding({ userName }: { userName?: string | null }) {
   );
 }
 
-function StepDots({ step }: { step: Step }) {
-  const order: Step[] = ["intro", "console", "done"];
+function StepDots({ step, order }: { step: Step; order: Step[] }) {
   const idx = order.indexOf(step);
   return (
     <div className="flex gap-1.5 px-6 pt-6 sm:px-8">
@@ -173,11 +191,45 @@ function ConsoleStep({ onAdded }: { onAdded: (name: string) => void }) {
   );
 }
 
+/** Optional Steam import. Two sub-phases: connect, then pick what you've played. */
+function SteamStep({ onNext }: { onNext: () => void }) {
+  const [connected, setConnected] = useState(false);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-xl font-extrabold">Bring your Steam library?</h2>
+        <p className="text-sm text-ink-soft">
+          {connected
+            ? "Pick the games you've actually played — they'll seed your recommendations."
+            : "Import what you've already played so recommendations know your taste straight away. Totally optional."}
+        </p>
+      </div>
+
+      {connected ? (
+        <SteamImport compact onDone={onNext} />
+      ) : (
+        <SteamConnect onConnected={() => setConnected(true)} />
+      )}
+
+      <button
+        type="button"
+        onClick={onNext}
+        className="w-full rounded-full px-6 py-2.5 text-sm font-bold text-ink-soft transition hover:bg-canvas"
+      >
+        Skip for now
+      </button>
+    </div>
+  );
+}
+
 function DoneStep({
   consoleName,
+  steamEnabled,
   onFinish,
 }: {
   consoleName: string | null;
+  steamEnabled: boolean;
   onFinish: () => void;
 }) {
   return (
@@ -198,6 +250,12 @@ function DoneStep({
             "Your console is saved. You can add more anytime."
           )}
         </p>
+        {steamEnabled && (
+          <p className="mt-2 text-sm text-ink-soft">
+            You can import your Steam library anytime from{" "}
+            <span className="font-bold">Steam</span> in the menu.
+          </p>
+        )}
       </div>
       <button
         type="button"

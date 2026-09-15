@@ -61,18 +61,24 @@ export default async function DashboardPage() {
         ) : (
           <ChannelGrid>
             {saved.map((s) => (
-              <GameCard
-                key={s.id}
-                game={{
-                  id: s.gameId,
-                  title: s.title,
-                  boxartUrl: s.boxartUrl,
-                  imageUrl: null,
-                  system: s.systemName
-                    ? { id: "", name: s.systemName, key: "" }
-                    : undefined,
-                }}
-              />
+              <div key={s.id} className="relative">
+                <GameCard
+                  game={{
+                    id: s.gameId,
+                    title: s.title,
+                    boxartUrl: s.boxartUrl,
+                    imageUrl: null,
+                    system: s.systemName
+                      ? { id: "", name: s.systemName, key: "" }
+                      : undefined,
+                  }}
+                />
+                {s.source === "steam" && (
+                  <span className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-ink/80 px-2 py-0.5 text-[10px] font-bold text-white">
+                    Steam
+                  </span>
+                )}
+              </div>
             ))}
           </ChannelGrid>
         )}
