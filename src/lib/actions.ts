@@ -13,7 +13,8 @@ export async function searchDevicesAction(
   return getDevices(q ? { search: q, limit: 20 } : { limit: 20 });
 }
 
-async function requireUserId(): Promise<string> {
+/** Current user id, or a thrown error. Shared with the Steam actions. */
+export async function requireUserId(): Promise<string> {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) throw new Error("Not authenticated");
@@ -36,6 +37,7 @@ export async function addConsole(deviceId: string): Promise<void> {
       deviceId,
       modelName: device.modelName,
       brandName: device.brand?.name ?? "Unknown",
+      socId: device.soc?.id ?? null,
       socName: device.soc?.name ?? null,
       gpuModel: device.soc?.gpuModel ?? null,
       isActive: existingCount === 0,
@@ -43,6 +45,7 @@ export async function addConsole(deviceId: string): Promise<void> {
     update: {
       modelName: device.modelName,
       brandName: device.brand?.name ?? "Unknown",
+      socId: device.soc?.id ?? null,
       socName: device.soc?.name ?? null,
       gpuModel: device.soc?.gpuModel ?? null,
     },

@@ -1,17 +1,13 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import type { Metadata } from "next";
-import { getListingsByDevice } from "@/lib/emuready";
-import { getActiveConsole, getSavedGames, currentUserId } from "@/lib/user-data";
-import { recommendGames, normalizeTitle } from "@/lib/compat";
-import { RecommendationList } from "@/components/RecommendationList";
-import {
-  RecommendationSettings,
-  type RecSettings,
-} from "@/components/RecommendationSettings";
+import { getActiveConsole, currentUserId } from "@/lib/user-data";
+import { resolveConsoleRef } from "@/lib/console-soc";
+import { RecommendationsBody } from "@/components/RecommendationsBody";
+import { RecommendationsSkeleton } from "@/components/RecommendationsSkeleton";
+import type { RecSettings } from "@/components/RecommendationSettings";
 
 export const metadata: Metadata = { title: "For You — Game Checker" };
-
-const QUALITY_RANK = { playable: 3, great: 2, perfect: 1 } as const;
 
 function Prompt({
   title,
@@ -55,11 +51,7 @@ export default async function RecommendationsPage({
     taste: params.taste !== "0",
   };
 
-  const [active, saved] = await Promise.all([
-    getActiveConsole(),
-    getSavedGames(),
-  ]);
-
+  const active = await getActiveConsole();
   if (!active) {
     return (
       <Prompt title="Pick your console first">
@@ -71,31 +63,9 @@ export default async function RecommendationsPage({
     );
   }
 
-  const librarySystems = new Map<string, number>();
-  for (const s of saved) {
-    if (s.systemName) {
-      librarySystems.set(s.systemName, (librarySystems.get(s.systemName) ?? 0) + 1);
-    }
-  }
-
-  // One paginated, cached device fetch feeds the whole page.
-  const listings = await getListingsByDevice(active.deviceId, 150).catch(() => []);
-  let recs = recommendGames(listings, active, {
-    limit: 300, // compute the full set; the client reveals it incrementally
-    excludeGameIds: new Set(saved.map((s) => s.gameId)),
-    excludeTitles: new Set(saved.map((s) => normalizeTitle(s.title))),
-    boostSystems: settings.taste ? librarySystems : undefined,
-    maxRank: QUALITY_RANK[settings.quality],
-  });
-
-  // Platforms available to filter by (before applying the platform filter).
-  const systems = [
-    ...new Set(recs.map((r) => r.game.system?.name).filter((n): n is string => !!n)),
-  ].sort();
-
-  if (settings.system !== "all") {
-    recs = recs.filter((r) => r.game.system?.name === settings.system);
-  }
+  // Cheap (cached device lookup at worst); needed before the pool can widen to
+  // the whole chipset, so it stays in the shell rather than the streamed body.
+  const consoleRef = await resolveConsoleRef(active);
 
   return (
     <div className="space-y-6">
@@ -103,7 +73,7 @@ export default async function RecommendationsPage({
         <div>
           <h1 className="text-3xl font-extrabold">For You</h1>
           <p className="text-ink-soft">
-            {settings.taste && librarySystems.size > 0
+            {settings.taste
               ? `Tuned to your library and your ${active.modelName}.`
               : `Games that run well on your ${active.modelName}.`}
           </p>
@@ -116,24 +86,13 @@ export default async function RecommendationsPage({
         </Link>
       </div>
 
-      <RecommendationSettings current={settings} systems={systems} />
-
-      {recs.length === 0 ? (
-        <div className="card-surface p-8 text-center text-ink-soft">
-          No games match these settings.{" "}
-          <Link href="/recommendations" className="font-bold text-primary-strong underline">
-            Reset filters
-          </Link>
-          .
-        </div>
-      ) : (
-        <>
-          <p className="text-sm font-semibold text-ink-soft">
-            {recs.length} game{recs.length === 1 ? "" : "s"} match
-          </p>
-          <RecommendationList items={recs} />
-        </>
-      )}
+      <Suspense fallback={<RecommendationsSkeleton />}>
+        <RecommendationsBody
+          settings={settings}
+          consoleRef={consoleRef}
+          modelName={active.modelName}
+        />
+      </Suspense>
     </div>
   );
 }

@@ -3,14 +3,27 @@
 import { useState } from "react";
 import { GameCard } from "./GameCard";
 import { ChannelGrid } from "./ChannelGrid";
-import type { Recommendation } from "@/lib/compat";
+
+/**
+ * Minimal per-game shape crossing the server/client boundary — deliberately not
+ * the full `Recommendation`, whose nested `Game` objects would add a few hundred
+ * KB of RSC payload for 300 items.
+ */
+export interface RecommendationItem {
+  id: string;
+  title: string;
+  boxartUrl: string | null;
+  imageUrl: string | null;
+  systemName: string | null;
+  rank: number;
+}
 
 /** Recommendation grid with incremental "show more" (no refetch). */
 export function RecommendationList({
   items,
   step = 24,
 }: {
-  items: Recommendation[];
+  items: RecommendationItem[];
   step?: number;
 }) {
   const [count, setCount] = useState(step);
@@ -20,8 +33,20 @@ export function RecommendationList({
   return (
     <div className="space-y-6">
       <ChannelGrid>
-        {shown.map(({ game, rank }) => (
-          <GameCard key={game.id} game={game} rank={rank} />
+        {shown.map((item) => (
+          <GameCard
+            key={item.id}
+            game={{
+              id: item.id,
+              title: item.title,
+              boxartUrl: item.boxartUrl,
+              imageUrl: item.imageUrl,
+              system: item.systemName
+                ? { id: "", name: item.systemName, key: "" }
+                : undefined,
+            }}
+            rank={item.rank}
+          />
         ))}
       </ChannelGrid>
 

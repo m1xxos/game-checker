@@ -73,29 +73,56 @@ export interface ConsoleMatch {
 }
 
 /**
+ * Everything the matcher needs from a saved console. A Prisma `ConsoleProfile`
+ * row satisfies this structurally, so call sites keep passing it directly.
+ */
+export interface ConsoleRef {
+  deviceId: string;
+  socId?: string | null;
+  socName?: string | null;
+}
+
+/**
+ * Loose SoC-name comparison, for profiles saved before `socId` existed. Raw
+ * lowercase equality drops valid matches over a stray space or a hyphen.
+ */
+function socKey(name: string | null | undefined): string {
+  return name ? name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() : "";
+}
+
+/**
  * Split listings by how well they match the user's console. `exact` wins when
- * device ids match; `similar` falls back to a shared SoC name (a strong signal
- * since GPU/CPU drive emulation performance).
+ * device ids match; `similar` falls back to a shared SoC (a strong signal since
+ * GPU/CPU drive emulation performance).
+ *
+ * The SoC id is preferred whenever both sides have one; the normalized name is
+ * only used when an id is missing, i.e. on consoles saved before the socId
+ * backfill. (The parameter is `target`, not `console` — the latter shadowed the
+ * global and made logging inside this function impossible.)
  */
 export function matchListingsToConsole(
   listings: Listing[],
-  console: { deviceId: string; socName?: string | null } | null,
+  target: ConsoleRef | null,
 ): ConsoleMatch {
-  if (!console) return { exact: [], similar: [], other: listings };
+  if (!target) return { exact: [], similar: [], other: listings };
 
   const exact: Listing[] = [];
   const similar: Listing[] = [];
   const other: Listing[] = [];
-  const soc = console.socName?.toLowerCase();
+  const wantSocId = target.socId ?? null;
+  const wantSocName = socKey(target.socName);
 
   for (const l of listings) {
-    if (l.deviceId === console.deviceId || l.device?.id === console.deviceId) {
+    if (l.deviceId === target.deviceId || l.device?.id === target.deviceId) {
       exact.push(l);
-    } else if (soc && l.device?.soc?.name?.toLowerCase() === soc) {
-      similar.push(l);
-    } else {
-      other.push(l);
+      continue;
     }
+    const soc = l.device?.soc;
+    const sameSoc =
+      wantSocId && soc?.id
+        ? soc.id === wantSocId
+        : !!wantSocName && socKey(soc?.name) === wantSocName;
+    (sameSoc ? similar : other).push(l);
   }
   return { exact, similar, other };
 }
@@ -158,6 +185,8 @@ export interface Recommendation {
   exact: boolean;
   /** Set when this game was boosted by the user's library (system affinity). */
   becauseOfSystem?: string;
+  /** Set when an external taste signal (e.g. Steam genres) boosted this game. */
+  becauseOfTaste?: string;
 }
 
 export interface RecommendOptions {
@@ -180,10 +209,27 @@ export interface RecommendOptions {
    * games that run great or perfect ("definitely runs well").
    */
   maxRank?: number;
+  /**
+   * Restrict results to these normalized titles. Powers surfaces like "from your
+   * Steam backlog": the same scoring, over a narrowed candidate set.
+   * Build keys with `normalizeTitle`.
+   */
+  restrictToTitles?: Set<string>;
+  /**
+   * External per-title taste weight in 0..1, keyed by `normalizeTitle`. Kept
+   * deliberately opaque so this module stays agnostic about where taste comes
+   * from — it never learns what a genre or a Steam account is. Titles absent from
+   * the map score 0 and are simply not boosted, never penalized.
+   */
+  titleAffinity?: Map<string, number>;
+  /** Human-readable reason per normalized title, surfaced as `becauseOfTaste`. */
+  titleAffinityReason?: Map<string, string>;
 }
 
 interface Agg {
   game: Game;
+  /** Normalized title — the aggregation key, reused for affinity lookups. */
+  key: string;
   bestRank: number;
   bestWeight: number;
   reportCount: number;
@@ -207,12 +253,20 @@ interface Agg {
  */
 export function recommendGames(
   listings: Listing[],
-  console: { deviceId: string; socName?: string | null } | null,
+  target: ConsoleRef | null,
   opts: RecommendOptions = {},
 ): Recommendation[] {
-  const { limit = 18, excludeGameIds, excludeTitles, boostSystems, maxRank = 3 } =
-    opts;
-  const { exact, similar } = matchListingsToConsole(listings, console);
+  const {
+    limit = 18,
+    excludeGameIds,
+    excludeTitles,
+    boostSystems,
+    maxRank = 3,
+    restrictToTitles,
+    titleAffinity,
+    titleAffinityReason,
+  } = opts;
+  const { exact, similar } = matchListingsToConsole(listings, target);
   // Same-chipset reports are a strong proxy but rate slightly below the exact
   // device they were measured on.
   const weighted = [
@@ -228,12 +282,14 @@ export function recommendGames(
     if (excludeGameIds?.has(l.game.id)) continue;
     const key = normalizeTitle(l.game.normalizedTitle ?? l.game.title);
     if (excludeTitles?.has(key)) continue;
+    if (restrictToTitles && !restrictToTitles.has(key)) continue;
     const rank = l.performance?.rank ?? 99;
     const created = Date.parse(l.createdAt ?? "") || 0;
     const cur = byGame.get(key);
     if (!cur) {
       byGame.set(key, {
         game: l.game,
+        key,
         bestRank: rank,
         bestWeight: weight,
         reportCount: 1,
@@ -263,26 +319,121 @@ export function recommendGames(
     if (a.bestRank > maxRank) continue;
 
     const base = tierPoints(a.bestRank) * a.bestWeight;
-    const confidence = Math.min(a.reportCount, 5) * 4; // up to +20
+    // Log-scaled, because the old `min(reportCount, 5) * 4` saturated: rarely hit
+    // against 150 listings from one device, hit by most popular games against a
+    // 300+ chipset-wide pool, at which point the term stopped discriminating.
+    const confidence = Math.min(25, 6 * Math.log2(1 + a.reportCount));
     const community = Math.max(-10, Math.min(20, a.upvotes - a.downvotes));
     const recency = a.newest && now - a.newest < 120 * DAY_MS ? 8 : 0;
+    // A chipset twin can differ in RAM, cooling and screen, so a game whose only
+    // evidence is one non-exact report is held back slightly.
+    const thin = !a.exact && a.reportCount === 1 ? 0.9 : 1;
 
     // Boost games on systems the user plays (taste affinity from the library).
     const systemName = a.game.system?.name;
     const affinity = systemName ? (boostSystems?.get(systemName) ?? 0) : 0;
-    const multiplier = 1 + Math.min(affinity, 4) * 0.2; // up to +80%
+    const systemMul = 1 + Math.min(affinity, 4) * 0.2; // up to +80%
+
+    // External taste. Capped well below system affinity because it can only ever
+    // cover a subset of titles — an unresolved game must not be systematically
+    // outranked by a resolved one of equal quality.
+    const taste = Math.min(1, Math.max(0, titleAffinity?.get(a.key) ?? 0));
+    const tasteMul = 1 + taste * 0.25;
 
     recs.push({
       game: a.game,
       rank: a.bestRank,
       reportCount: a.reportCount,
       exact: a.exact,
-      score: (base + confidence + community + recency) * multiplier,
+      score: (base + confidence + community + recency) * thin * systemMul * tasteMul,
       becauseOfSystem: affinity > 0 ? systemName : undefined,
+      becauseOfTaste: taste > 0 ? titleAffinityReason?.get(a.key) : undefined,
     });
   }
 
   return recs
     .sort((x, y) => y.score - x.score || y.reportCount - x.reportCount)
     .slice(0, limit);
+}
+
+// --- Fresh reports ----------------------------------------------------------
+
+export interface FreshPick {
+  game: Game;
+  /** Performance rank of this report. */
+  rank: number;
+  /** ms epoch of the report. */
+  testedAt: number;
+  /** Device it was tested on — may be a chipset sibling, not the user's model. */
+  deviceName?: string;
+  emulatorName?: string;
+  /** True when tested on the user's exact device. */
+  exact: boolean;
+}
+
+/**
+ * The newest community reports relevant to a console, de-duplicated by title.
+ *
+ * Costs no extra API call: `listings.get` already returns newest-first, so page 1
+ * of the pool the recommendations page fetches anyway *is* the fresh feed. Note
+ * this is "recently tested", not "recently released" — EmuReady exposes no
+ * release-date ordering, so promising new *games* would be a lie.
+ */
+export function recentlyTested(
+  listings: Listing[],
+  target: ConsoleRef | null,
+  opts: {
+    limit?: number;
+    withinDays?: number;
+    maxRank?: number;
+    excludeGameIds?: Set<string>;
+    excludeTitles?: Set<string>;
+  } = {},
+): FreshPick[] {
+  const {
+    limit = 12,
+    withinDays = 45,
+    maxRank = 3,
+    excludeGameIds,
+    excludeTitles,
+  } = opts;
+
+  const { exact, similar } = matchListingsToConsole(listings, target);
+  const cutoff = Date.now() - withinDays * DAY_MS;
+
+  const candidates = [
+    ...exact.map((l) => ({ l, isExact: true })),
+    ...similar.map((l) => ({ l, isExact: false })),
+  ].sort(
+    (a, b) =>
+      (Date.parse(b.l.createdAt ?? "") || 0) -
+      (Date.parse(a.l.createdAt ?? "") || 0),
+  );
+
+  const seen = new Set<string>();
+  const picks: FreshPick[] = [];
+
+  for (const { l, isExact } of candidates) {
+    if (!l.game) continue;
+    const testedAt = Date.parse(l.createdAt ?? "") || 0;
+    if (!testedAt || testedAt < cutoff) break; // sorted newest-first
+    const rank = l.performance?.rank ?? 99;
+    if (rank > maxRank) continue;
+    if (excludeGameIds?.has(l.game.id)) continue;
+    const key = normalizeTitle(l.game.normalizedTitle ?? l.game.title);
+    if (excludeTitles?.has(key) || seen.has(key)) continue;
+
+    seen.add(key);
+    picks.push({
+      game: l.game,
+      rank,
+      testedAt,
+      deviceName: l.device?.modelName,
+      emulatorName: l.emulator?.name,
+      exact: isExact,
+    });
+    if (picks.length >= limit) break;
+  }
+
+  return picks;
 }

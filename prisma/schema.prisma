@@ -70,6 +70,9 @@ model ConsoleProfile {
   id           String   @id @default(cuid())
   userId       String
   deviceId     String // EmuReady device id
+  /// EmuReady SoC id. Null on rows saved before this column existed; backfilled
+  /// lazily by resolveConsoleRef(). Preferred over socName for chipset matching.
+  socId        String?
   modelName    String
   brandName    String
   socName      String?
